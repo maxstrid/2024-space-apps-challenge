@@ -30,7 +30,7 @@ Kelvin Voight Model from \cite{seismic}.
 $x(t)$ is the displacement function(measured), $\sigma$ is stress, $\epsilon$ is strain
 \begin{align}
   F &= f_e + f_v = kx + k'\frac{\partial x}{\partial t}\\
-  \frac{dx}{dt} &= \frac{1}{k'}\left(-kx + F\right)\\
+  \frac{d^2x}{dt^2} &= -k_p\frac{dx}{dt} -kx + F\\
   \sigma &= \sigma_1 + \sigma_2 = \mu\epsilon + \eta\dot{\epsilon}\\
   \epsilon(t) &= \epsilon(0)e^{-t/t_0} + \frac{1}{\eta}\int_0^t\sigma(\theta)e^{-\left(t-\theta\right)/t_0}d\theta
 \end{align}
