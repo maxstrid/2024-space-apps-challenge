@@ -9,7 +9,7 @@ from scipy import linalg
 NP.random.seed(0)
 
 # Settings of the filter
-N = 100000 # Horizon length
+N = 100 # Horizon length
 dt = 0.05; # Time step
 
 sigma_p = 0.5 # Standard deviation of the position measurements
@@ -129,7 +129,7 @@ current_parameters["Y",lambda x: horzcat(*x)] = simulated_Y[:,0:N]
 current_parameters["S"] = linalg.inv(P) # Arrival cost is the inverse of the initial covariance
 current_parameters["x0"] = x0
 initialisation_state = shooting(0)
-initialisation_state["X",lambda x: horzcat(*x)] = simulated_X[:,0:N]
+initialisation_state["X",lambda x: horzcat(*x)] = simulated_X[:,0:N] * 0
 res = nlpsol(p=current_parameters, x0=initialisation_state, lbg=0, ubg=0)
 
 # Get the solution
@@ -140,31 +140,32 @@ estimated_W[:,0:N-1] = solution["W",lambda x: horzcat(*x)]
 # Now make a loop for the rest of the simulation
 for i in range(1,Nsimulation-N+1):
 
-    # Update the arrival cost, using linearisations around the estimate of MHE at the beginning of the horizon (according to the 'Smoothed EKF Update'): first update the state and covariance with the measurement that will be deleted, and next propagate the state and covariance because of the shifting of the horizon
+  # Update the arrival cost, using linearisations around the estimate of MHE at the beginning of the horizon (according to the 'Smoothed EKF Update'): first update the state and covariance with the measurement that will be deleted, and next propagate the state and covariance because of the shifting of the horizon
+  if(i%1000 == 0):
     print("step %d/%d (%s)" % (i, Nsimulation-N , nlpsol.stats()["return_status"]))
-    H0 = H(solution["X",0])
-    K = mtimes([P,H0.T,linalg.inv(mtimes([H0,P,H0.T])+R)])
-    P = mtimes((DM.eye(Nstates)-mtimes(K,H0)),P)
-    h0 = h(solution["X",0])
-    x0 = x0 + mtimes(K, current_parameters["Y",0]-h0-mtimes(H0,x0-solution["X",0]))
-    x0 = phi(x0, current_parameters["U",0], solution["W",0])
-    F = PHI(solution["X",0], current_parameters["U",0], solution["W",0])
-    P = mtimes([F,P,F.T]) + linalg.inv(Q)
-    # Get the measurements and control inputs
-    current_parameters["U",lambda x: horzcat(*x)] = simulated_U[:,i:i+N-1]
-    current_parameters["Y",lambda x: horzcat(*x)] = simulated_Y[:,i:i+N]
-    current_parameters["S"] = linalg.inv(P)
-    current_parameters["x0"] = x0
-    # Initialize the system with the shifted solution
-    initialisation_state["W",lambda x: horzcat(*x),0:N-2] = estimated_W[:,i:i+N-2] # The shifted solution for the disturbances
-    initialisation_state["W",N-2] = DM.zeros(Ndisturbances,1) # The last node for the disturbances is initialized with zeros
-    initialisation_state["X",lambda x: horzcat(*x),0:N-1] = estimated_X[:,i:i+N-1] # The shifted solution for the state estimates
-    # The last node for the state is initialized with a forward simulation
-    phi0 = phi(initialisation_state["X",N-1], current_parameters["U",-1], initialisation_state["W",-1])
-    initialisation_state["X",N-1] = phi0
-    # And now initialize the solver and solve the problem
-    res = nlpsol(p=current_parameters, x0=initialisation_state, lbg=0, ubg=0)
-    solution = shooting(res["x"])
+  H0 = H(solution["X",0])
+  K = mtimes([P,H0.T,linalg.inv(mtimes([H0,P,H0.T])+R)])
+  P = mtimes((DM.eye(Nstates)-mtimes(K,H0)),P)
+  h0 = h(solution["X",0])
+  x0 = x0 + mtimes(K, current_parameters["Y",0]-h0-mtimes(H0,x0-solution["X",0]))
+  x0 = phi(x0, current_parameters["U",0], solution["W",0])
+  F = PHI(solution["X",0], current_parameters["U",0], solution["W",0])
+  P = mtimes([F,P,F.T]) + linalg.inv(Q)
+  # Get the measurements and control inputs
+  current_parameters["U",lambda x: horzcat(*x)] = simulated_U[:,i:i+N-1]
+  current_parameters["Y",lambda x: horzcat(*x)] = simulated_Y[:,i:i+N]
+  current_parameters["S"] = linalg.inv(P)
+  current_parameters["x0"] = x0
+  # Initialize the system with the shifted solution
+  initialisation_state["W",lambda x: horzcat(*x),0:N-2] = estimated_W[:,i:i+N-2] # The shifted solution for the disturbances
+  initialisation_state["W",N-2] = DM.zeros(Ndisturbances,1) # The last node for the disturbances is initialized with zeros
+  initialisation_state["X",lambda x: horzcat(*x),0:N-1] = estimated_X[:,i:i+N-1] # The shifted solution for the state estimates
+  # The last node for the state is initialized with a forward simulation
+  phi0 = phi(initialisation_state["X",N-1], current_parameters["U",-1], initialisation_state["W",-1])
+  initialisation_state["X",N-1] = phi0
+  # And now initialize the solver and solve the problem
+  res = nlpsol(p=current_parameters, x0=initialisation_state, lbg=0, ubg=0)
+  solution = shooting(res["x"])
 
     # Now get the state estimate. Note that we are only interested in the last node of the horizon
     estimated_X[:,N-1+i] = solution["X",N-1]
@@ -173,11 +174,11 @@ for i in range(1,Nsimulation-N+1):
 plt.figure(1)
 plt.clf()
 plt.plot(t,vec(estimated_X[0,:]),'b--')
-plt.plot(t, vec(simulated_X[0, :]), 'r--')
-plt.plot(t, vec(simulated_Y[0, :]), 'y--')
+plt.plot(t,vec(simulated_X[0,:]),'r--')
+plt.plot(t,vec(simulated_Y[0,:]),'y--')
 plt.title("Position")
 plt.xlabel('Time')
-plt.legend(['Estimated position','Real position', 'Measured Position'])
+plt.legend(['Estimated position','Real position','Measured position'])
 plt.grid()
 
 plt.figure(2)
