@@ -1,3 +1,14 @@
+*.blg
+*.bbl
+*.aux
+*.out
+*.run.xml
+*.toc
+seismic_model-blx.bib
+*.fdb*
+*.fls
+*gz
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

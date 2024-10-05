@@ -1,0 +1,40 @@
+\documentclass{article}
+\usepackage[letterpaper, margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage[backend=bibtex]{biblatex}
+\usepackage[hidelinks, linktoc=all]{hyperref}
+\usepackage{tikz,tikz-3dplot}
+\usepackage[hypcap=false, margin = 3cm]{caption}
+\usepackage{booktabs}
+
+\DeclareMathOperator{\Ell}{\mathcal{L}}
+\newcommand{\harpoon}{\overset{\rightharpoonup}}
+
+\usetikzlibrary{calc}
+
+\bibliography{references}
+
+\title{Seismic Model}
+\author{Max Fisch, Justin Turcotte}
+\date{October 2024}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+\section{Seismic Model}
+\subsection{Damped Oscillator}
+\subsubsection{Equations}
+Kelvin Voight Model from \cite{seismic}.
+$x(t)$ is the displacement function(measured), $\sigma$ is stress, $\epsilon$ is strain
+\begin{align}
+  F &= f_e + f_v = kx + k'\frac{\partial x}{\partial t}\\
+  \frac{dx}{dt} &= \frac{1}{k'}\left(-kx + F\right)\\
+  \sigma &= \sigma_1 + \sigma_2 = \mu\epsilon + \eta\dot{\epsilon}\\
+  \epsilon(t) &= \epsilon(0)e^{-t/t_0} + \frac{1}{\eta}\int_0^t\sigma(\theta)e^{-\left(t-\theta\right)/t_0}d\theta
+\end{align}
+
+\newpage
+\printbibliography
+\end{document}
