@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 from dataclasses import dataclass
 
-data_folder = "../nasa_space_apps/demo/space_apps_2024_seismic_detection/space_apps_2024_seismic_detection/data/lunar/training/data/S12_GradeA/"
+data_folder = "./data/data/lunar/training/"
 
 @dataclass
 class SeismicData:
@@ -33,7 +33,7 @@ class SeismicData:
 
 class DataReader:
     def __init__(self, filter_data = True, pool_data = False):
-        self.catalog_df = pd.read_csv('./apollo12_catalog_GradeA_final.csv')
+        self.catalog_df = pd.read_csv(f'{data_folder}catalogs/apollo12_catalog_GradeA_final.csv')
 
     def read(self, i: int, filter_data = True, pool_data = False) -> SeismicData:
         return self.__read_event(self.catalog_df.iloc[i], filter_data=filter_data, pool_data=pool_data)
@@ -42,7 +42,7 @@ class DataReader:
         time_of_event = event['time_rel(sec)']
         event_filename = event['filename']
 
-        event_df = pd.read_csv(f'{data_folder}{event_filename}.csv')
+        event_df = pd.read_csv(f'{data_folder}data/S12_GradeA/{event_filename}.csv')
 
         time = np.array(event_df['time_rel(sec)'].tolist())
         velocity = np.array(event_df['velocity(m/s)'])
@@ -59,33 +59,6 @@ class DataReader:
             time_index = find_nearest_time_index(time, time_of_event)
 
         return SeismicData(velocity = velocity, time = time, time_of_event = time_of_event)
-
-
-def plot_catalog_event(event: pd.Series) -> None:
-    time_rel = event['time_rel(sec)']
-    filename = event['filename']
-
-    event_df = pd.read_csv(f'{data_folder}/{filename}.csv')
-
-    time = np.array(event_df['time_rel(sec)'].tolist())
-    velocity = np.array(event_df['velocity(m/s)'].tolist())
-
-    velocity_filtered = butter_bandpass_filter(velocity, 0.5, 1.0, 6.0)
-
-    data_pooled = max_pool_1d(np.vstack((velocity_filtered, time)), 100)
-
-    velocity_pooled = data_pooled[0:1, :].flatten()
-    time_pooled = data_pooled[1:2, :].flatten()
-
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 3))
-    plt.rcParams['keymap.quit'].append(' ')
-
-    time_index = find_nearest_time_index(time_pooled, time_rel)
-
-    plot(f'{filename} filtered', ax1, time, velocity_filtered, time_rel)
-    plot(f'{filename} pooled', ax2, time_pooled, velocity_pooled, time_pooled[time_index])
-
-    plt.show()
 
 
 def max_pool_1d(array: np.array, n: int) -> np.array:
