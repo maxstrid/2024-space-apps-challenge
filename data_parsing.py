@@ -9,31 +9,56 @@ import torch.nn as nn
 
 import matplotlib.pyplot as plt
 
+from dataclasses import dataclass
+
 data_folder = "../nasa_space_apps/demo/space_apps_2024_seismic_detection/space_apps_2024_seismic_detection/data/lunar/training/data/S12_GradeA/"
 
+@dataclass
+class SeismicData:
+    velocity: np.array
+    time: np.array
+    time_of_event: None | float
 
-class DataType(Enum):
-    Mars = 0
-    Lunar = 1
+    def plot(self, title, ax):
+        ax.plot(self.time, self.velocity)
 
+        ax.set_xlim([min(self.time), max(self.time)])
+        ax.set_ylabel('Velocity (m/s)')
+        ax.set_xlabel('Time (s)')
+        ax.set_title(f'{title}')
 
-dara_type = DataType.Lunar
+        if self.time_of_event:
+            arrival_line = ax.axvline(x=self.time_of_event, c='red', label='Arrival')
+            ax.legend(handles=[arrival_line])
 
+class DataReader:
+    def __init__(self, filter_data = True, pool_data = False):
+        self.catalog_df = pd.read_csv('./apollo12_catalog_GradeA_final.csv')
 
-def read_catalog() -> pd.DataFrame:
-    df = pd.read_csv('./apollo12_catalog_GradeA_final.csv')
-    return df
+    def read(self, i: int, filter_data = True, pool_data = False) -> SeismicData:
+        return self.__read_event(self.catalog_df.iloc[i], filter_data=filter_data, pool_data=pool_data)
 
+    def __read_event(self, event: pd.Series, filter_data = True, pool_data = False):
+        time_of_event = event['time_rel(sec)']
+        event_filename = event['filename']
 
-def plot(title, ax, time, vel, line_time):
-    ax.plot(time, vel)
+        event_df = pd.read_csv(f'{data_folder}{event_filename}.csv')
 
-    ax.set_xlim([min(time), max(time)])
-    ax.set_ylabel('Velocity (m/s)')
-    ax.set_xlabel('Time (s)')
-    ax.set_title(f'{title}')
-    arrival_line = ax.axvline(x=line_time, c='red', label='Arrival')
-    ax.legend(handles=[arrival_line])
+        time = np.array(event_df['time_rel(sec)'].tolist())
+        velocity = np.array(event_df['velocity(m/s)'])
+
+        if filter_data:
+            velocity = butter_bandpass_filter(velocity, 0.5, 1.0, 6.0)
+
+        if pool_data:
+            data_pooled = max_pool_1d(np.vstack((velocity, time)), 100)
+
+            velocity = data_pooled[0:1, :].flatten()
+            time = data_pooled[1:2, :].flatten()
+
+            time_index = find_nearest_time_index(time, time_of_event)
+
+        return SeismicData(velocity = velocity, time = time, time_of_event = time_of_event)
 
 
 def plot_catalog_event(event: pd.Series) -> None:
@@ -55,8 +80,10 @@ def plot_catalog_event(event: pd.Series) -> None:
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 3))
     plt.rcParams['keymap.quit'].append(' ')
 
+    time_index = find_nearest_time_index(time_pooled, time_rel)
+
     plot(f'{filename} filtered', ax1, time, velocity_filtered, time_rel)
-    plot(f'{filename} pooled', ax2, time_pooled, velocity_pooled, time_rel)
+    plot(f'{filename} pooled', ax2, time_pooled, velocity_pooled, time_pooled[time_index])
 
     plt.show()
 
@@ -77,25 +104,38 @@ def max_pool_1d(array: np.array, n: int) -> np.array:
 
     return result
 
+def find_nearest_time_index(timesteps: np.array, time: float) -> int:
+    size = timesteps.shape[0]
 
-# Implements SA to detect peak(s) in the data
-# N is the max iterations
-def detect_peak(data: pd.DataFrame, N=1000) -> int:
-    temperature = 1.0
-    for i in range(0, N):
-        temperature = temperature / (i + 1)
+    n = size // 2
+    max = size
+    min = 0
+    print("Searching for", time)
+    val = 0
+    while True:
+        val = timesteps[n]
 
-    return time
+        if max - min <= 1:
+            print(n, val, timesteps[n])
+            return n
 
-
-def test_events():
-    catalog_df = read_catalog()
-    for _, row in catalog_df.iterrows():
-        plot_catalog_event(row)
-
+        if time < val:
+            max = n
+            n = (min + max) // 2
+        elif time > val:
+            min = n
+            n = (max + min) // 2
 
 def main():
-    test_events()
+    reader = DataReader()
+
+    fig, ax = plt.subplots(1, 1, figsize=(10, 3))
+
+    plt.rcParams['keymap.quit'].append(' ')
+
+    reader.read(0).plot('0', ax)
+
+    plt.show()
 
 
 if __name__ == "__main__":
