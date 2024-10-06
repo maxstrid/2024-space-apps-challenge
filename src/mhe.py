@@ -4,6 +4,7 @@ import numpy as np
 import data_parsing
 import matplotlib.pylab as plt
 from tqdm.auto import tqdm
+import pandas as pd
 
 class MHE:
 
@@ -123,6 +124,14 @@ class MHE:
             ax.legend()
             plt.show()
         return fig, ax
+
+    def save(self):
+        df = pd.DateFrame()
+        df['x-est'] = pd.Series(self.x_est)
+        df['y-est'] = pd.Series(self.y_est)
+        df['f-est'] = pd.Series(self.f_est)
+
+        df.to_csv('out.csv')
 
     def get_latest_x_est(self):
         return self.x_est
