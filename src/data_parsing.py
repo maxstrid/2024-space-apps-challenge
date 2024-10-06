@@ -63,7 +63,9 @@ class DataReader:
     def __read_event(self,
                      event: pd.Series,
                      filter_data=True,
-                     pool_data=False):
+                     pool_data=False,
+                     n_max_subsections=10,
+                     n_max_sections=2):
         time_of_event = event['time_rel(sec)']
         event_filename = event['filename']
 
@@ -90,7 +92,10 @@ class DataReader:
 
             delta = delta * 100
 
-        ranges = self.__find_peak_ranges(velocity, time)
+        ranges = self.__find_peak_ranges(velocity,
+                                         time,
+                                         n_subsections=n_max_subsections,
+                                         n_sections=n_max_sections)
 
         return SeismicData(velocity=velocity,
                            time=time,
