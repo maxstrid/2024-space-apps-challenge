@@ -2,8 +2,9 @@ import pandas as pd
 import numpy as np
 import scipy
 from enum import Enum
-from filtering import butter_bandpass_filter
 import random
+import obspy
+from scipy.signal import butter, sosfilt
 
 import matplotlib.pyplot as plt
 
@@ -11,10 +12,13 @@ from dataclasses import dataclass
 
 data_folder = "./data/data/lunar/training/"
 
+
 @dataclass
 class SeismicData:
     velocity: np.array
     time: np.array
+    delta: float
+    sampling_rate: float
     time_of_event: None | float
 
     def plot(self, title, ax):
@@ -33,8 +37,10 @@ class SeismicData:
 
 
 class DataReader:
-    def __init__(self, filter_data = True, pool_data = False):
-        self.catalog_df = pd.read_csv(f'{data_folder}catalogs/apollo12_catalog_GradeA_final.csv')
+
+    def __init__(self, filter_data=True, pool_data=False):
+        self.catalog_df = pd.read_csv(
+            f'{data_folder}catalogs/apollo12_catalog_GradeA_final.csv')
 
     def read(self, i: int, filter_data=True, pool_data=False) -> SeismicData:
         return self.__read_event(self.catalog_df.iloc[i],
@@ -48,103 +54,102 @@ class DataReader:
         time_of_event = event['time_rel(sec)']
         event_filename = event['filename']
 
-        event_df = pd.read_csv(f'{data_folder}data/S12_GradeA/{event_filename}.csv')
+        event_seed = obspy.read(
+            f'{data_folder}data/S12_GradeA/{event_filename}.mseed')
+        traces = event_seed.traces[0].copy()
 
-        time = np.array(event_df['time_rel(sec)'].tolist())
-        velocity = np.array(event_df['velocity(m/s)'])
+        time = np.array(traces.times())
+        velocity = np.array(traces.data)
+
+        delta = traces.stats.delta
+        sampling_rate = traces.stats.sampling_rate
 
         if filter_data:
-            velocity = butter_bandpass_filter(velocity, 0.5, 1.0, 6.0)
+            velocity = self.__butter_bandpass_filter(velocity, 0.5, 1.0, 6.0)
 
         if pool_data:
-            data_pooled = max_pool_1d(np.vstack((velocity, time)), 100)
+            data_pooled = self.__max_pool_1d(np.vstack((velocity, time)), 100)
 
             velocity = data_pooled[0:1, :].flatten()
             time = data_pooled[1:2, :].flatten()
 
-            time_index = find_nearest_time_index(time, time_of_event)
+            time_index = self.__find_nearest_time_index(time, time_of_event)
+
+            delta = delta * 100
 
         return SeismicData(velocity=velocity,
                            time=time,
+                           delta=delta,
+                           sampling_rate=sampling_rate,
                            time_of_event=time_of_event)
 
+    def __max_pool_1d(self, array: np.array, n: int) -> np.array:
+        size = array.shape[1] // n
 
-def plot_catalog_event(event: pd.Series) -> None:
-    time_rel = event['time_rel(sec)']
-    filename = event['filename']
+        if len(array) % n != 0:
+            size += 1
 
-    event_df = pd.read_csv(f'{data_folder}/{filename}.csv')
+        result = np.zeros((2, size))
 
-    time = np.array(event_df['time_rel(sec)'].tolist())
-    velocity = np.array(event_df['velocity(m/s)'].tolist())
+        for i in range(size):
+            subarr = array[:, i * n:(i * n) + n]
+            max = np.max(subarr, axis=1)
+            result[0, i] = max[0]
+            result[1, i] = max[1]
 
-    velocity_filtered = butter_bandpass_filter(velocity, 0.5, 1.0, 6.0)
+        return result
 
-    data_pooled = max_pool_1d(np.vstack((velocity_filtered, time)), 100)
+    def __find_nearest_time_index(self, timesteps: np.array,
+                                  time: float) -> int:
+        size = timesteps.shape[0]
+        n = size // 2
+        max = size
+        min = 0
+        print("Searching for", time)
+        val = 0
+        while True:
+            val = timesteps[n]
 
-    velocity_pooled = data_pooled[0:1, :].flatten()
-    time_pooled = data_pooled[1:2, :].flatten()
+            if max - min <= 1:
+                print(n, val, timesteps[n])
+                return n
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 3))
-    plt.rcParams['keymap.quit'].append(' ')
+            if time < val:
+                max = n
+                n = (min + max) // 2
+            elif time > val:
+                min = n
+                n = (max + min) // 2
 
-    time_index = find_nearest_time_index(time_pooled, time_rel)
+    def __butter_bandpass_filter(self, data, lowcut, highcut, fs, order=5):
+        sos = self.__butter_bandpass(lowcut, highcut, fs, order=5)
+        y = sosfilt(sos, data)
+        return y
 
-    plot(f'{filename} filtered', ax1, time, velocity_filtered, time_rel)
-    plot(f'{filename} pooled', ax2, time_pooled, velocity_pooled,
-         time_pooled[time_index])
-
-    plt.show()
-
-
-def max_pool_1d(array: np.array, n: int) -> np.array:
-    size = array.shape[1] // n
-
-    if len(array) % n != 0:
-        size += 1
-
-    result = np.zeros((2, size))
-
-    for i in range(size):
-        subarr = array[:, i * n:(i * n) + n]
-        max = np.max(subarr, axis=1)
-        result[0, i] = max[0]
-        result[1, i] = max[1]
-
-    return result
-
-
-def find_nearest_time_index(timesteps: np.array, time: float) -> int:
-    size = timesteps.shape[0]
-
-    n = size // 2
-    max = size
-    min = 0
-    print("Searching for", time)
-    val = 0
-    while True:
-        val = timesteps[n]
-
-        if max - min <= 1:
-            print(n, val, timesteps[n])
-            return n
-
-        if time < val:
-            max = n
-            n = (min + max) // 2
-        elif time > val:
-            min = n
-            n = (max + min) // 2
+    def __butter_bandpass(self, lowcut, highcut, fs, order=5):
+        nyq = 0.5 * fs
+        low = lowcut / nyq
+        high = highcut / nyq
+        sos = butter(order, [low, high],
+                     btype='band',
+                     analog=False,
+                     output='sos')
+        return sos
 
 
 def main():
     reader = DataReader()
 
-    fig, ax = plt.subplots(1, 1, figsize=(10, 3))
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 10))
 
     plt.rcParams['keymap.quit'].append(' ')
 
-    reader.read(0).plot('0', ax)
+    i = 2
+
+    reader.read(i, filter_data=False).plot('Unfiltered Data', ax1)
+    reader.read(i).plot('Filtered Data', ax2)
+    reader.read(i, pool_data=True).plot('Filtered + Max Pooled (N = 100) Data',
+                                        ax3)
 
     plt.show()
 
