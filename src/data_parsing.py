@@ -10,7 +10,14 @@ import matplotlib.pyplot as plt
 
 from dataclasses import dataclass
 
-data_folder = "./data/data/lunar/training/"
+from pathlib import Path
+
+data_folder = "./data/data/"
+
+
+class DataType(Enum):
+    Lunar = 0
+    Mars = 1
 
 
 @dataclass
@@ -19,6 +26,7 @@ class SeismicData:
     time: np.array
     delta: float
     sampling_rate: float
+    filename: str
     max_ranges: list[tuple[int, int]]
     time_of_event: None | float
 
@@ -28,7 +36,7 @@ class SeismicData:
         ax.set_xlim([min(self.time), max(self.time)])
         ax.set_ylabel('Velocity (m/s)')
         ax.set_xlabel('Time (s)')
-        ax.set_title(f'{title}')
+        ax.set_title(f'{self.filename}: {title}')
 
         lines = []
 
@@ -54,9 +62,20 @@ class SeismicData:
 
 class DataReader:
 
-    def __init__(self, filter_data=True, pool_data=False):
-        self.catalog_df = pd.read_csv(
-            f'{data_folder}catalogs/apollo12_catalog_GradeA_final.csv')
+    def __init__(self,
+                 data_type=DataType.Lunar,
+                 filter_data=True,
+                 pool_data=False):
+        if data_type == DataType.Lunar:
+            self.catalog_df = pd.read_csv(
+                f'{data_folder}lunar/training/catalogs/apollo12_catalog_GradeA_final.csv'
+            )
+        else:
+            self.catalog_df = pd.read_csv(
+                f'{data_folder}mars/training/catalogs/Mars_InSight_training_catalog_final.csv'
+            )
+
+        self.data_type = data_type
 
     def read(self,
              i: int,
@@ -76,12 +95,15 @@ class DataReader:
                      pool_data=False,
                      n_max_subsections=10,
                      n_max_sections=2):
-        time_of_event = event['time_rel(sec)']
-        event_filename = event['filename']
 
-        event_seed = obspy.read(
-            f'{data_folder}data/S12_GradeA/{event_filename}.mseed')
-        traces = event_seed.traces[0].copy()
+        seed_data = self.__parse_lunar_data(
+            event
+        ) if self.data_type == DataType.Lunar else self.__parse_mars_data(
+            event)
+
+        time_of_event = seed_data['time_of_event']
+        event_filename = seed_data['event_filename']
+        traces = seed_data['traces']
 
         time = np.array(traces.times())
         velocity = np.array(traces.data)
@@ -110,15 +132,13 @@ class DataReader:
         return SeismicData(velocity=velocity,
                            time=time,
                            delta=delta,
+                           filename=event_filename,
                            max_ranges=ranges,
                            sampling_rate=sampling_rate,
                            time_of_event=time_of_event)
 
     def __max_pool_1d(self, array: np.array, n: int) -> np.array:
         size = array.shape[1] // n
-
-        if len(array) % n != 0:
-            size += 1
 
         result = np.zeros((2, size))
 
@@ -167,6 +187,35 @@ class DataReader:
                      output='sos')
         return sos
 
+    def __parse_lunar_data(self, event: pd.Series) -> dict[str, float]:
+        time_of_event = event['time_rel(sec)']
+        event_filename = event['filename']
+
+        event_seed = obspy.read(
+            f'{data_folder}lunar/training/data/S12_GradeA/{event_filename}.mseed'
+        )
+        traces = event_seed.traces[0].copy()
+
+        return {
+            'time_of_event': time_of_event,
+            'event_filename': event_filename,
+            'traces': traces
+        }
+
+    def __parse_mars_data(self, event: pd.Series) -> dict[str, float]:
+        time_of_event = event['time_rel(sec)']
+        event_filename = Path(event['filename']).with_suffix('')
+
+        event_seed = obspy.read(
+            f'{data_folder}mars/training/data/{event_filename}.mseed')
+        traces = event_seed.traces[0].copy()
+
+        return {
+            'time_of_event': time_of_event,
+            'event_filename': event_filename,
+            'traces': traces
+        }
+
     # Splits the graph into 10 subsections, finds the top 3 sections, and returns their ranges.
     def __find_peak_ranges(self,
                            velocity: np.array,
@@ -190,14 +239,13 @@ class DataReader:
 
 
 def main():
-    reader = DataReader()
+    reader = DataReader(data_type=DataType.Lunar)
 
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 10))
 
     plt.rcParams['keymap.quit'].append(' ')
 
-    i = 4
-
+    i = 10
     reader.read(i, filter_data=False).plot('Unfiltered Data', ax1)
     reader.read(i).plot('Filtered Data', ax2)
     reader.read(i, pool_data=True).plot('Filtered + Max Pooled (N = 100) Data',
