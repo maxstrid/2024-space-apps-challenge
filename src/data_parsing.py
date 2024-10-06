@@ -183,8 +183,8 @@ class DataReader:
         sorted_max = sorted(max_ranges, key=lambda max_tuple: max_tuple[0])
         sorted_max.reverse()
 
-        return map(lambda vel_range: (time[vel_range[0]], time[vel_range[1]]),
-                   [max_tuple[1] for max_tuple in sorted_max[0:n_sections]])
+        return list(map(lambda vel_range: (time[vel_range[0]], time[vel_range[1]]),
+                   [max_tuple[1] for max_tuple in sorted_max[0:n_sections]]))
 
 
 def main():
