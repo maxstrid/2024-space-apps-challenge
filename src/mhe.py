@@ -1,5 +1,5 @@
 import casadi
-from casadi import Opti
+from casadi import Opti, OptiSol
 import numpy as np
 import data_parsing
 import matplotlib.pylab as plt
@@ -15,13 +15,15 @@ class MHE:
                  function_cost=0.001,
                  rk_error_cost=1000,
                  measured_error_cost=10,
-                 force_variance_cost=0.01):
+                 force_variance_cost=0.01,
+                 force_variance_variance_cost=1):
         self.k = ground_spring_constant
         self.k_p = ground_damping_constant
         self.k_cost = measured_error_cost
         self.k_f = function_cost
         self.k_rk4 = rk_error_cost
         self.k_force_var = force_variance_cost
+        self.k_f_v_v = force_variance_variance_cost
 
         self.xdot = self.make_diff_eq()
         self.h = self.make_h()
@@ -61,8 +63,12 @@ class MHE:
             c4 = 0
             for ij in range(self.N - 2):
                 c4 += (force_vars[ij] - force_vars[ij + 1])**2
-            #TODO: penalize change in change in force
-            c = self.k_cost * c1 + self.k_f * c2 + self.k_rk4 * c3 + self.k_force_var * c4
+            c5 = 0
+            for j in range(self.N-3):
+                d1 = force_vars[j] - force_vars[j+1]
+                d2 = force_vars[j+1] - force_vars[j+2]
+                c5 += (d2 - d1)**2
+            c = self.k_cost * c1 + self.k_f * c2 + self.k_rk4 * c3 + self.k_force_var * c4 + self.k_f_v_v * c5
             k_prev = 0.1
             if i != 0:
                 for j in range(self.N - 2):
