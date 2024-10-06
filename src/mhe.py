@@ -5,6 +5,7 @@ import data_parsing
 import matplotlib.pylab as plt
 from tqdm.auto import tqdm
 
+
 class MHE:
 
     def __init__(self,
@@ -38,7 +39,7 @@ class MHE:
             self.n = data.size
             self.data = data
 
-    def solve_all(self):
+    def solve_all(self, thread_num=0):
         self.x_est = np.zeros((self.n, 2))
 
         self.f_est = np.zeros(self.n - 1)
@@ -46,7 +47,7 @@ class MHE:
         lastvars = None
         last_x = None
         last_f = None
-        for i in tqdm(range(self.n - self.N + 1)):
+        for i in tqdm(range(self.n - self.N + 1), desc=f"thread {thread_num}"):
             opti = Opti()
 
             x_vars = [opti.variable(2) for _ in range(self.N)]
@@ -64,9 +65,9 @@ class MHE:
             for ij in range(self.N - 2):
                 c4 += (force_vars[ij] - force_vars[ij + 1])**2
             c5 = 0
-            for j in range(self.N-3):
-                d1 = force_vars[j] - force_vars[j+1]
-                d2 = force_vars[j+1] - force_vars[j+2]
+            for j in range(self.N - 3):
+                d1 = force_vars[j] - force_vars[j + 1]
+                d2 = force_vars[j + 1] - force_vars[j + 2]
                 c5 += (d2 - d1)**2
             c = self.k_cost * c1 + self.k_f * c2 + self.k_rk4 * c3 + self.k_force_var * c4 + self.k_f_v_v * c5
             k_prev = 1000
@@ -80,7 +81,12 @@ class MHE:
                                  2) * k_prev * 2 / self.N
 
             opti.minimize(c)
-            opti.solver('ipopt', {"ipopt.print_level": 0, "print_time": False, "ipopt.linear_solver" : "spral"})
+            opti.solver(
+                'ipopt', {
+                    "ipopt.print_level": 0,
+                    "print_time": False,
+                    "ipopt.linear_solver": "spral"
+                })
             if i != 0:
                 opti.set_initial(lastvars)
             sol: OptiSol = opti.solve()
@@ -95,33 +101,32 @@ class MHE:
             else:
                 self.x_est[i + self.N - 1] = sol.value(x_vars[-1])
                 self.f_est[i + self.N - 2] = sol.value(force_vars[-1])
-                tqdm.write(str(f"{sol.value(force_vars[-1])}"))
+                # tqdm.write(str(f"{sol.value(force_vars[-1])}"))
             arrs.append([(opti.value(x), opti.value(f))
                          for x, f in zip(x_vars, force_vars)])
-            tqdm.write(str(f"{i}, :"))
-            tqdm.write(str(f"\tcost_y: {sol.value(c1)}"))
-            tqdm.write(str(f"\tcost_force: {sol.value(c2)}"))
-            tqdm.write(str(f"\tcost_rkf: {sol.value(c3)}"))
+            # tqdm.write(str(f"{i}, :"))
+            # tqdm.write(str(f"\tcost_y: {sol.value(c1)}"))
+            # tqdm.write(str(f"\tcost_force: {sol.value(c2)}"))
+            # tqdm.write(str(f"\tcost_rkf: {sol.value(c3)}"))
 
     def plot(self, fig=None, axis=None, plot=True):
         if fig != axis:
             raise Exception("Need to provide both or neither")
         if fig == None and axis == None:
-            fig, ax = plt.subplots(2)
+            fig, ax = plt.subplots(1)
 
-        ax[0].plot(np.linspace(0, self.dt * self.n, self.n),
+        ax.plot(np.linspace(0, self.dt * self.n, self.n),
                 self.x_est[:, 0],
                 label="x_tilde")
-        ax[0].plot(np.linspace(0, self.dt * self.n, self.n),
+        ax.plot(np.linspace(0, self.dt * self.n, self.n),
                 self.x_est[:, 1],
                 label="y_tilde")
-        ax[1].plot(np.linspace(0, self.dt * self.n, self.n - 1),
+        ax.plot(np.linspace(0, self.dt * self.n, self.n - 1),
                 self.f_est[:],
                 label="force_tilde")
 
         if plot:
-            ax[0].legend()
-            ax[1].legend()
+            ax.legend()
             plt.show()
         return fig, ax
 
