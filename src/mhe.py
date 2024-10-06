@@ -12,7 +12,7 @@ class MHE:
                  dt=0.1509433962264151,
                  ground_spring_constant=10,
                  ground_damping_constant=3,
-                 function_cost=0.001,
+                 force_cost=0.001,
                  rk_error_cost=1000,
                  measured_error_cost=10,
                  force_variance_cost=0.01,
@@ -20,7 +20,7 @@ class MHE:
         self.k = ground_spring_constant
         self.k_p = ground_damping_constant
         self.k_cost = measured_error_cost
-        self.k_f = function_cost
+        self.k_f = force_cost
         self.k_rk4 = rk_error_cost
         self.k_force_var = force_variance_cost
         self.k_f_v_v = force_variance_variance_cost
@@ -51,7 +51,7 @@ class MHE:
 
             x_vars = [opti.variable(2) for _ in range(self.N)]
             force_vars = [opti.variable() for _ in range(self.N - 1)]
-            y_vars = self.data[i:i + self.N, 0]
+            y_vars = self.data[i:i + self.N]
 
             c1 = self.cost(*x_vars, *y_vars)
             c2 = sum(f**2 for f in force_vars)
@@ -69,7 +69,7 @@ class MHE:
                 d2 = force_vars[j+1] - force_vars[j+2]
                 c5 += (d2 - d1)**2
             c = self.k_cost * c1 + self.k_f * c2 + self.k_rk4 * c3 + self.k_force_var * c4 + self.k_f_v_v * c5
-            k_prev = 0.1
+            k_prev = 1000
             if i != 0:
                 for j in range(self.N - 2):
                     c += casadi.sum1((x_vars[j] - last_x[j + 1])**
@@ -78,12 +78,9 @@ class MHE:
                           last_f[j + 1])**2 * k_prev * (self.N - j) / self.N
                 c += casadi.sum1((x_vars[self.N - 2] - last_x[self.N - 1])**
                                  2) * k_prev * 2 / self.N
-            else:
-                opti.subject_to(x_vars[0][0] == 0)
-                opti.subject_to(x_vars[0][1] == 0)
 
             opti.minimize(c)
-            opti.solver('ipopt', {"ipopt.print_level": 0, "print_time": False})
+            opti.solver('ipopt', {"ipopt.print_level": 0, "print_time": False, "ipopt.linear_solver" : "spral"})
             if i != 0:
                 opti.set_initial(lastvars)
             sol: OptiSol = opti.solve()
