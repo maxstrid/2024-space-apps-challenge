@@ -108,20 +108,21 @@ class MHE:
         if fig != axis:
             raise Exception("Need to provide both or neither")
         if fig == None and axis == None:
-            fig, ax = plt.subplots(1)
+            fig, ax = plt.subplots(2)
 
-        ax.plot(np.linspace(0, self.dt * self.n, self.n),
+        ax[0].plot(np.linspace(0, self.dt * self.n, self.n),
                 self.x_est[:, 0],
                 label="x_tilde")
-        ax.plot(np.linspace(0, self.dt * self.n, self.n),
+        ax[0].plot(np.linspace(0, self.dt * self.n, self.n),
                 self.x_est[:, 1],
                 label="y_tilde")
-        ax.plot(np.linspace(0, self.dt * self.n, self.n - 1),
+        ax[1].plot(np.linspace(0, self.dt * self.n, self.n - 1),
                 self.f_est[:],
                 label="force_tilde")
 
         if plot:
-            ax.legend()
+            ax[0].legend()
+            ax[1].legend()
             plt.show()
         return fig, ax
 
