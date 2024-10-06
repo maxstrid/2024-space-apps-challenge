@@ -6,6 +6,8 @@ import matplotlib.pylab as plt
 from tqdm.auto import tqdm
 import pandas as pd
 
+
+
 class MHE:
 
     def __init__(self,
@@ -39,7 +41,7 @@ class MHE:
             self.n = data.size
             self.data = data
 
-    def solve_all(self):
+    def solve_all(self, thread_num=0):
         self.x_est = np.zeros((self.n, 2))
 
         self.f_est = np.zeros(self.n - 1)
@@ -47,27 +49,34 @@ class MHE:
         lastvars = None
         last_x = None
         last_f = None
-        for i in tqdm(range(self.n - self.N + 1)):
+        last_k = self.k
+        last_kp = self.k_p
+        for i in tqdm(range(self.n - self.N + 1), desc=f"thread {thread_num}"):
             opti = Opti()
 
             x_vars = [opti.variable(2) for _ in range(self.N)]
             force_vars = [opti.variable() for _ in range(self.N - 1)]
+            opti.subject_to([f > 0 for f in force_vars])
+            # k = opti.variable()
+            # kp = opti.variable()
+            k = self.k
+            kp = self.k_p
             y_vars = self.data[i:i + self.N]
 
             c1 = self.cost(*x_vars, *y_vars)
             c2 = sum(f**2 for f in force_vars)
             c3 = sum(
                 casadi.sum1((x_vars[j] -
-                             self.phi(x_vars[j - 1], force_vars[j - 1]))**2)
+                             self.phi(x_vars[j - 1], force_vars[j - 1], k, kp))**2)
                 for j in range(1, self.N)) / self.N
             #penalize change in force
             c4 = 0
             for ij in range(self.N - 2):
                 c4 += (force_vars[ij] - force_vars[ij + 1])**2
             c5 = 0
-            for j in range(self.N-3):
-                d1 = force_vars[j] - force_vars[j+1]
-                d2 = force_vars[j+1] - force_vars[j+2]
+            for j in range(self.N - 3):
+                d1 = force_vars[j] - force_vars[j + 1]
+                d2 = force_vars[j + 1] - force_vars[j + 2]
                 c5 += (d2 - d1)**2
             c = self.k_cost * c1 + self.k_f * c2 + self.k_rk4 * c3 + self.k_force_var * c4 + self.k_f_v_v * c5
             k_prev = 1000
@@ -79,15 +88,24 @@ class MHE:
                           last_f[j + 1])**2 * k_prev * (self.N - j) / self.N
                 c += casadi.sum1((x_vars[self.N - 2] - last_x[self.N - 1])**
                                  2) * k_prev * 2 / self.N
+            c6 = ((last_k - k)**2+(last_kp - kp)**2) * (i+1)
+            c += c6
 
             opti.minimize(c)
-            opti.solver('ipopt', {"ipopt.print_level": 0, "print_time": False, "ipopt.linear_solver" : "spral"})
+            opti.solver(
+                'ipopt', {
+                    "ipopt.print_level": 0,
+                    "print_time": False,
+                    "ipopt.linear_solver": "spral"
+                })
             if i != 0:
                 opti.set_initial(lastvars)
             sol: OptiSol = opti.solve()
             lastvars = sol.value_variables()
             last_x = [sol.value(x) for x in x_vars]
             last_f = [sol.value(f) for f in force_vars]
+            last_k = sol.value(k)
+            last_kp = sol.value(kp)
             if i == 0:
                 for j in range(self.N - 1):
                     self.x_est[j] = sol.value(x_vars[j])
@@ -96,27 +114,27 @@ class MHE:
             else:
                 self.x_est[i + self.N - 1] = sol.value(x_vars[-1])
                 self.f_est[i + self.N - 2] = sol.value(force_vars[-1])
-                tqdm.write(str(f"{sol.value(force_vars[-1])}"))
+                # tqdm.write(str(f"{sol.value(force_vars[-1])}"))
             arrs.append([(opti.value(x), opti.value(f))
                          for x, f in zip(x_vars, force_vars)])
-            tqdm.write(str(f"{i}, :"))
-            tqdm.write(str(f"\tcost_y: {sol.value(c1)}"))
-            tqdm.write(str(f"\tcost_force: {sol.value(c2)}"))
-            tqdm.write(str(f"\tcost_rkf: {sol.value(c3)}"))
+            # tqdm.write(str(f"{i}, :"))
+            # tqdm.write(str(f"\tcost_y: {sol.value(c1)}"))
+            # tqdm.write(str(f"\tcost_force: {sol.value(c2)}"))
+            # tqdm.write(str(f"\tcost_rkf: {sol.value(c3)}"))
 
     def plot(self, fig=None, axis=None, plot=True):
         if fig != axis:
             raise Exception("Need to provide both or neither")
         if fig == None and axis == None:
-            fig, ax = plt.subplots(1)
+            fig, ax = plt.subplots(2)
 
-        ax.plot(np.linspace(0, self.dt * self.n, self.n),
+        ax[0].plot(np.linspace(0, self.dt * self.n, self.n),
                 self.x_est[:, 0],
                 label="x_tilde")
-        ax.plot(np.linspace(0, self.dt * self.n, self.n),
+        ax[0].plot(np.linspace(0, self.dt * self.n, self.n),
                 self.x_est[:, 1],
                 label="y_tilde")
-        ax.plot(np.linspace(0, self.dt * self.n, self.n - 1),
+        ax[1].plot(np.linspace(0, self.dt * self.n, self.n - 1),
                 self.f_est[:],
                 label="force_tilde")
 
@@ -157,10 +175,12 @@ class MHE:
     def make_diff_eq(self):
         x = casadi.SX.sym('x', 2)
         f = casadi.SX.sym('force')
+        k = casadi.SX.sym('k')
+        kp = casadi.SX.sym('kp')
         return casadi.Function(
-            'f', [x, f],
-            [casadi.vertcat(x[1], -self.k_p * x[1] - self.k * x[0] + f)],
-            ['x', 'f'], ['xdot'])
+            'f', [x, f, k, kp],
+            [casadi.vertcat(x[1], -(kp - f) * x[1] - k * x[0])],
+            ['x', 'f', 'k', 'kp'], ['xdot'])
 
     def make_h(self):
         x = casadi.SX.sym('x', 2)
@@ -169,11 +189,13 @@ class MHE:
     def make_rk4(self):
         x = casadi.SX.sym('x', 2)
         f = casadi.SX.sym('force')
+        k = casadi.SX.sym('k')
+        kp = casadi.SX.sym('kp')
 
-        k1 = self.xdot(x, f)
-        k2 = self.xdot(x + self.dt / 2.0 * k1, f)
-        k3 = self.xdot(x + self.dt / 2.0 * k2, f)
-        k4 = self.xdot(x + self.dt * k3, f)
+        k1 = self.xdot(x, f, k, kp)
+        k2 = self.xdot(x + self.dt / 2.0 * k1, f, k, kp)
+        k3 = self.xdot(x + self.dt / 2.0 * k2, f, k, kp)
+        k4 = self.xdot(x + self.dt * k3, f, k, kp)
 
         x_1 = x + self.dt / 6.0 * (k1 + 2 * k2 + 2 * k3 + k4)
-        return casadi.Function('phi', [x, f], [x_1], ['x', 'force'], ['x1'])
+        return casadi.Function('phi', [x, f, k, kp], [x_1], ['x', 'force', 'k', 'kp'], ['x1'])
