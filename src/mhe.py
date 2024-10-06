@@ -3,7 +3,7 @@ from casadi import Opti, OptiSol
 import numpy as np
 import data_parsing
 import matplotlib.pylab as plt
-
+from tqdm.auto import tqdm
 
 class MHE:
 
@@ -46,7 +46,7 @@ class MHE:
         lastvars = None
         last_x = None
         last_f = None
-        for i in range(self.n - self.N + 1):
+        for i in tqdm(range(self.n - self.N + 1)):
             opti = Opti()
 
             x_vars = [opti.variable(2) for _ in range(self.N)]
@@ -95,13 +95,13 @@ class MHE:
             else:
                 self.x_est[i + self.N - 1] = sol.value(x_vars[-1])
                 self.f_est[i + self.N - 2] = sol.value(force_vars[-1])
-                print(sol.value(force_vars[-1]))
+                tqdm.write(str(f"{sol.value(force_vars[-1])}"))
             arrs.append([(opti.value(x), opti.value(f))
                          for x, f in zip(x_vars, force_vars)])
-            print(i, ":")
-            print("\tcost_y:", sol.value(c1))
-            print("\tcost_force:", sol.value(c2))
-            print("\tcost_rkf:", sol.value(c3))
+            tqdm.write(str(f"{i}, :"))
+            tqdm.write(str(f"\tcost_y: {sol.value(c1)}"))
+            tqdm.write(str(f"\tcost_force: {sol.value(c2)}"))
+            tqdm.write(str(f"\tcost_rkf: {sol.value(c3)}"))
 
     def plot(self, fig=None, axis=None, plot=True):
         if fig != axis:
