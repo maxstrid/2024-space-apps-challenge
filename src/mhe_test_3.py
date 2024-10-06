@@ -103,17 +103,22 @@ for i in range(n - N + 1):
     for ij in range(N - 2):
         c4 += (force_vars[ij] - force_vars[ij + 1])**2
     #TODO: penalize change in change in force
-    c = c1 * 10 + c2 + c3 + c4 * 0.01
     k_prev = 0.1
     if i != 0:
         for j in range(N - 2):
             c += sum1((x_vars[j] - last_x[j + 1])**2) * k_prev * (N - j) / N
             c += (force_vars[j] - last_f[j + 1])**2 * k_prev * (N - j) / N
         c += sum1((x_vars[N - 2] - last_x[N - 1])**2) * k_prev * 2 / N
+    c5 = 0
+    for j in range(N-3):
+        d1 = force_vars[j] - force_vars[j+1]
+        d2 = force_vars[j+1] - force_vars[j+2]
+        c5 += (d2 - d1)**2
     else:
         opti.subject_to(x_vars[0][0] == 0)
         opti.subject_to(x_vars[0][1] == 0)
 
+    c = c1 * 10 + c2 + c3 + c4 * 0.01 + c5
     opti.minimize(c)
     opti.solver('ipopt', {
         "ipopt.print_level": 0,
