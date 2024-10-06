@@ -19,6 +19,7 @@ class SeismicData:
     time: np.array
     delta: float
     sampling_rate: float
+    max_ranges: list[tuple[int, int]]
     time_of_event: None | float
 
     def plot(self, title, ax):
@@ -29,11 +30,23 @@ class SeismicData:
         ax.set_xlabel('Time (s)')
         ax.set_title(f'{title}')
 
+        lines = []
+
+        for i, (vel_start, vel_end) in enumerate(self.max_ranges):
+            lines.append(
+                ax.axvline(x=vel_start, c='blue',
+                           label=f'Range {i + 1} Start'))
+            lines.append(
+                ax.axvline(x=vel_end, c='blue', label=f'Range {i + 1} End'))
+
         if self.time_of_event:
             arrival_line = ax.axvline(x=self.time_of_event,
                                       c='red',
                                       label='Arrival')
-            ax.legend(handles=[arrival_line])
+            ax.legend(handles=lines + [arrival_line])
+            return
+
+        ax.legend(handles=lines)
 
 
 class DataReader:
@@ -77,9 +90,12 @@ class DataReader:
 
             delta = delta * 100
 
+        ranges = self.__find_peak_ranges(velocity, time)
+
         return SeismicData(velocity=velocity,
                            time=time,
                            delta=delta,
+                           max_ranges=ranges,
                            sampling_rate=sampling_rate,
                            time_of_event=time_of_event)
 
@@ -136,6 +152,28 @@ class DataReader:
                      output='sos')
         return sos
 
+    # Splits the graph into 10 subsections, finds the top 3 sections, and returns their ranges.
+    def __find_peak_ranges(self,
+                           velocity: np.array,
+                           time: np.array,
+                           n_subsections=10,
+                           n_sections=2) -> list[tuple[int, int]]:
+        size = velocity.shape[0]
+        jump_size = size // n_subsections
+
+        max_ranges: list[tuple[int, tuple[int, int]]] = []
+
+        for i in range(0, size, jump_size):
+            vel_range = velocity[i:i + jump_size]
+
+            max_ranges.append([np.max(vel_range), [i, i + jump_size]])
+
+        sorted_max = sorted(max_ranges, key=lambda max_tuple: max_tuple[0])
+        sorted_max.reverse()
+
+        return map(lambda vel_range: (time[vel_range[0]], time[vel_range[1]]),
+                   [max_tuple[1] for max_tuple in sorted_max[0:n_sections]])
+
 
 def main():
     reader = DataReader()
@@ -144,7 +182,7 @@ def main():
 
     plt.rcParams['keymap.quit'].append(' ')
 
-    i = 2
+    i = 4
 
     reader.read(i, filter_data=False).plot('Unfiltered Data', ax1)
     reader.read(i).plot('Filtered Data', ax2)
