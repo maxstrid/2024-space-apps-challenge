@@ -27,7 +27,7 @@ f_sim = [get_force(i * mhe.dt, i) for i in range(1, n)]
 
 mhe.read(y_sim)
 mhe.solve_all()
-fig, ax = mhe.plot()
+fig, ax = mhe.plot(plot=False)
 ax.plot(np.linspace(0, mhe.dt * n, n), x_sim[:, 0], label="x")
 ax.plot(np.linspace(0, mhe.dt * n, n), y_sim[:, 0], label="y")
 ax.plot(np.linspace(0, mhe.dt * n, n), x_sim[:, 1], label="vx")
