@@ -34,10 +34,13 @@ class SeismicData:
 
         for i, (vel_start, vel_end) in enumerate(self.max_ranges):
             lines.append(
-                ax.axvline(x=vel_start, c='blue',
+                ax.axvline(x=self.time[vel_start],
+                           c='blue',
                            label=f'Range {i + 1} Start'))
             lines.append(
-                ax.axvline(x=vel_end, c='blue', label=f'Range {i + 1} End'))
+                ax.axvline(x=self.time[vel_end],
+                           c='blue',
+                           label=f'Range {i + 1} End'))
 
         if self.time_of_event:
             arrival_line = ax.axvline(x=self.time_of_event,
@@ -183,8 +186,7 @@ class DataReader:
         sorted_max = sorted(max_ranges, key=lambda max_tuple: max_tuple[0])
         sorted_max.reverse()
 
-        return list(map(lambda vel_range: (time[vel_range[0]], time[vel_range[1]]),
-                   [max_tuple[1] for max_tuple in sorted_max[0:n_sections]]))
+        return [max_tuple[1] for max_tuple in sorted_max[0:n_sections]]
 
 
 def main():
