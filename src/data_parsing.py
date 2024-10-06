@@ -55,10 +55,17 @@ class DataReader:
         self.catalog_df = pd.read_csv(
             f'{data_folder}catalogs/apollo12_catalog_GradeA_final.csv')
 
-    def read(self, i: int, filter_data=True, pool_data=False) -> SeismicData:
+    def read(self,
+             i: int,
+             filter_data=True,
+             pool_data=False,
+             n_max_subsections=10,
+             n_max_sections=2) -> SeismicData:
         return self.__read_event(self.catalog_df.iloc[i],
                                  filter_data=filter_data,
-                                 pool_data=pool_data)
+                                 pool_data=pool_data,
+                                 n_max_subsections=n_max_subsections,
+                                 n_max_sections=n_max_sections)
 
     def __read_event(self,
                      event: pd.Series,
