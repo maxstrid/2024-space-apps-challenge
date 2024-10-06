@@ -11,13 +11,20 @@ import matplotlib.pyplot as plt
 from dataclasses import dataclass
 
 from pathlib import Path
+from glob import glob
+import os
 
 data_folder = "./data/data/"
 
 
-class DataType(Enum):
+class CelestialBody(Enum):
     Lunar = 0
     Mars = 1
+
+
+class DataType(Enum):
+    Training = 0
+    Test = 1
 
 
 @dataclass
@@ -63,47 +70,53 @@ class SeismicData:
 class DataReader:
 
     def __init__(self,
-                 data_type=DataType.Lunar,
+                 celestial_body=CelestialBody.Lunar,
+                 data_type=DataType.Training,
                  filter_data=True,
                  pool_data=False):
-        if data_type == DataType.Lunar:
-            self.catalog_df = pd.read_csv(
-                f'{data_folder}lunar/training/catalogs/apollo12_catalog_GradeA_final.csv'
-            )
-        else:
-            self.catalog_df = pd.read_csv(
-                f'{data_folder}mars/training/catalogs/Mars_InSight_training_catalog_final.csv'
-            )
-
         self.data_type = data_type
+        if self.data_type == DataType.Training:
+            if celestial_body == CelestialBody.Lunar:
+                self.catalog_df = pd.read_csv(
+                    f'{data_folder}lunar/training/catalogs/apollo12_catalog_GradeA_final.csv'
+                )
+            else:
+                self.catalog_df = pd.read_csv(
+                    f'{data_folder}mars/training/catalogs/Mars_InSight_training_catalog_final.csv'
+                )
+        else:
+            folder = "lunar"
+            if celestial_body == CelestialBody.Mars:
+                folder = "mars"
+            self.catalog = list(glob(f'{data_folder}{folder}/test/**/*.mseed'))
+
+        self.celestial_body = celestial_body
 
     def read(self,
-             i: int,
+             index: int,
              filter_data=True,
              pool_data=False,
              n_max_subsections=10,
-             n_max_sections=2) -> SeismicData:
-        return self.__read_event(self.catalog_df.iloc[i],
-                                 filter_data=filter_data,
-                                 pool_data=pool_data,
-                                 n_max_subsections=n_max_subsections,
-                                 n_max_sections=n_max_sections)
+             n_max_sections=2):
 
-    def __read_event(self,
-                     event: pd.Series,
-                     filter_data=True,
-                     pool_data=False,
-                     n_max_subsections=10,
-                     n_max_sections=2):
+        traces = None
+        time_of_event = None
+        event_filename = None
 
-        seed_data = self.__parse_lunar_data(
-            event
-        ) if self.data_type == DataType.Lunar else self.__parse_mars_data(
-            event)
+        if self.data_type == DataType.Training:
+            seed_data = self.__parse_lunar_data(
+                self.catalog_df.iloc[index]
+            ) if self.celestial_body == CelestialBody.Lunar else self.__parse_mars_data(
+                self.catalog_df.iloc[index])
 
-        time_of_event = seed_data['time_of_event']
-        event_filename = seed_data['event_filename']
-        traces = seed_data['traces']
+            time_of_event = seed_data['time_of_event']
+            event_filename = seed_data['event_filename']
+            traces = seed_data['traces']
+        else:
+            seed_data = obspy.read(self.catalog[index])
+
+            event_filename = os.path.basename(self.catalog[index])
+            traces = seed_data.traces[0].copy()
 
         time = np.array(traces.times())
         velocity = np.array(traces.data)
@@ -119,8 +132,10 @@ class DataReader:
 
             velocity = data_pooled[0:1, :].flatten()
             time = data_pooled[1:2, :].flatten()
+            if time_of_event:
 
-            time_index = self.__find_nearest_time_index(time, time_of_event)
+                time_index = self.__find_nearest_time_index(
+                    time, time_of_event)
 
             delta = delta * 100
 
@@ -239,13 +254,14 @@ class DataReader:
 
 
 def main():
-    reader = DataReader(data_type=DataType.Lunar)
+    reader = DataReader(celestial_body=CelestialBody.Lunar,
+                        data_type=DataType.Training)
 
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 10))
 
     plt.rcParams['keymap.quit'].append(' ')
 
-    i = 10
+    i = 0
     reader.read(i, filter_data=False).plot('Unfiltered Data', ax1)
     reader.read(i).plot('Filtered Data', ax2)
     reader.read(i, pool_data=True).plot('Filtered + Max Pooled (N = 100) Data',
