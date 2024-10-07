@@ -8,12 +8,12 @@ from concurrent.futures import *
 import time
 import pandas as pd
 
-cpu_count = os.cpu_count() - 10
+cpu_count = os.cpu_count()
 print(cpu_count)
 
 def run(i):
     try:
-        data_reader = data_parsing.DataReader()
+        data_reader = data_parsing.DataReader(data_type=data_parsing.DataType.Test)
         data = data_reader.read(i, n_max_subsections=50, n_max_sections=5)
         mhe = MHE.MHE(30, dt=data.delta,
                         ground_spring_constant=30.93226074688124,

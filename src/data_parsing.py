@@ -88,7 +88,7 @@ class DataReader:
             folder = "lunar"
             if celestial_body == CelestialBody.Mars:
                 folder = "mars"
-            self.catalog = list(glob(f'{data_folder}{folder}/test/**/*.mseed'))
+            self.catalog = list(glob(f'{data_folder}{folder}/test/**/*.mseed', recursive=True))
 
         self.celestial_body = celestial_body
 
