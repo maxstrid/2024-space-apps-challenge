@@ -38,5 +38,5 @@ def run(i):
         print(tb=traceback.format_exc())
 
 
-with ProcessPoolExecutor(max_workers=cpu_count) as exe:
-    exe.map(run, [i for i in range(cpu_count)])
+with ProcessPoolExecutor(max_workers=10) as exe:
+    exe.map(run, [i for i in range(45, 55)])
