@@ -11,7 +11,7 @@ x = np.linspace(0, 0.15 * len(data['f-est']), len(data['f-est']))
 
 #take progressive rolling averages
 axes: list[plt.Axes]
-fig, axes = plt.subplots(4)
+fig, axes = plt.subplots(5)
 axes[0].plot(data['f-est'], label="raw")
 
 #take rolling average
@@ -49,5 +49,10 @@ axes[2].plot(d2, label="long-term")
 ratio = d/d2
 
 axes[3].plot(ratio, label="ratio")
+
+axes[4].plot(data['f-est'])
+axes[4].plot(d)
+axes[4].plot(d2)
+axes[4].plot(ratio/25)
 
 plt.show()
