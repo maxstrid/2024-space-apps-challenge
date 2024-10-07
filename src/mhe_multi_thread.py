@@ -14,7 +14,7 @@ print(cpu_count)
 def run(i):
     try:
         data_reader = data_parsing.DataReader(data_type=data_parsing.DataType.Test)
-        data = data_reader.read(i, n_max_subsections=50, n_max_sections=5)
+        data = data_reader.read(i, n_max_subsections=10, n_max_sections=3)
         mhe = MHE.MHE(30, dt=data.delta,
                         ground_spring_constant=30.93226074688124,
                         ground_damping_constant=0.05,
